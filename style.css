@@ -1,0 +1,18 @@
+body {
+    background-color: aqua;
+    color: #333333; /* Sets the text color for better contrast */
+}
+
+textarea {
+    background-color: #ffffff; /* Light background for text areas */
+    color: #333333; /* Dark text for readability */
+}
+
+button {
+    background-color: #0068c9; /* A shade of blue for buttons */
+    color: white;
+}
+
+.stRadio > label {
+    color: #0068c9; /* Color for radio button labels */
+}
