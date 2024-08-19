@@ -1,9 +1,9 @@
 import streamlit as st
 import openai
-from secret_key import openai_key
+
 
 # Set OpenAI API key
-openai.api_key = openai_key
+openai.api_key = st.secrets["openai_key"]
 
 def generate_template(schema, sample_data, base_template):
     prompt = (
