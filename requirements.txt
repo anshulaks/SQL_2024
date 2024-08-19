@@ -168,7 +168,6 @@ typing_extensions==4.10.0
 tzdata==2023.3
 urllib3==2.2.1
 uvicorn==0.29.0
-values==2020.12.3
 watchdog==4.0.0
 watchfiles==0.21.0
 wcwidth==0.2.9
