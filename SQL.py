@@ -13,7 +13,7 @@ import os
 
 
 # Load OpenAI API key from secret_key.py
-from secret_key import openai_key
+openai.api_key = st.secrets["openai_key"]
 
 # Database setup
 Base = declarative_base()
