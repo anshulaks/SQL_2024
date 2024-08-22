@@ -37,11 +37,13 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 Base.metadata.create_all(engine)
 
-# Function to set OpenAI API key
-def set_openai_api_key(api_key: str):
-    openai.api_key = api_key
 
-set_openai_api_key(openai_key)
+# Function to set OpenAI API key from Streamlit secrets
+def set_openai_api_key():
+    openai.api_key = st.secrets["openai_key"]
+
+# Set the API key by calling the function
+set_openai_api_key()
 
 # Agents
 class SchemaAgent:
