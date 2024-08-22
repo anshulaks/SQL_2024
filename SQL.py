@@ -7,11 +7,13 @@ from sqlalchemy.orm import sessionmaker
 import pandas as pd
 import base64
 import xml.etree.ElementTree as ET
- 
+import sqlite3
+import os
+
 
 
 # Load OpenAI API key from secret_key.py
-openai.api_key = st.secrets["openai_key"]
+from secret_key import openai_key
 
 # Database setup
 Base = declarative_base()
@@ -35,14 +37,11 @@ engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 Base.metadata.create_all(engine)
 
+# Function to set OpenAI API key
+def set_openai_api_key(api_key: str):
+    openai.api_key = api_key
 
-
-# Function to set OpenAI API key from Streamlit secrets
-def set_openai_api_key():
-    openai.api_key = st.secrets["openai_key"]
-
-# Set the API key by calling the function
-set_openai_api_key()
+set_openai_api_key(openai_key)
 
 # Agents
 class SchemaAgent:
@@ -91,7 +90,8 @@ class QuestionGenerationAgent:
             if difficulty in ["Level 1", "Level 2"]:
                 complexity_instruction = "Generate a basic SQL question using SELECT, FROM, and WHERE clauses with simple conditions."
             elif difficulty == "Level 3":
-                complexity_instruction = "Generate a basic SQL question using SELECT, FROM, WHERE clauses with multiple conditions, including basic logical operators (AND, OR)."
+                complexity_instruction = """Generate a basic SQL question using SELECT, FROM, WHERE clauses with multiple conditions,
+                                                including basic logical operators (AND, OR)."""
             elif difficulty in ["Level 4", "Level 5"]:
                 complexity_instruction = "Generate an SQL question using SELECT, FROM, WHERE, and advanced conditions like LIKE, IN, or BETWEEN."
 
@@ -241,7 +241,34 @@ class UIAgent:
         elif page == "Saved Schemas":
             self.saved_schemas_page()
 
+
+    def generate_database_file(self, schema_sql, sample_data, db_filename="generated_database.db"):
+        # Delete the existing DB file to avoid conflicts
+        if os.path.exists(db_filename):
+            os.remove(db_filename)
         
+        # Create a new SQLite database
+        conn = sqlite3.connect(db_filename)
+        cursor = conn.cursor()
+
+        # Execute schema commands
+        for command in schema_sql.split(';'):
+            if command.strip():
+                cursor.execute(command)
+
+        # Insert sample data
+        for table_name, rows in sample_data.items():
+            for record in rows:
+                columns = ', '.join(record.keys())
+                placeholders = ', '.join('?' for _ in record.values())
+                sql = f"INSERT OR REPLACE INTO {table_name} ({columns}) VALUES ({placeholders})"
+                cursor.execute(sql, tuple(record.values()))
+
+        conn.commit()
+        conn.close()
+
+        return db_filename
+
     def generate_questions_page(self):
         st.title("Generate SQL Questions")
         session = Session()
@@ -261,7 +288,7 @@ class UIAgent:
         # Fetch the saved schemas using SchemaAgent
         saved_schemas = self.schema_agent.get_saved_schemas()
         saved_schema_names = [schema.name for schema in saved_schemas]
-        
+
         if st.session_state.show_settings:
             col1, col2 = st.columns(2)
             with col1:
@@ -285,7 +312,6 @@ class UIAgent:
             else:
                 # Load the selected saved schema and its sample data
                 schema, sample_data = self.schema_agent.get_schema_and_data(schema_option)
-                
 
         if st.button("Show Schema and Data🗃️"):
             st.session_state.show_sample_data = True
@@ -294,7 +320,7 @@ class UIAgent:
             # Explicitly assign the sample_data to session state
             st.session_state.sample_data = sample_data
 
-            st.experimental_rerun()
+            #st.experimental_rerun()
 
         if st.session_state.show_sample_data:
             st.write("Sample Data:")
@@ -317,13 +343,17 @@ class UIAgent:
 
         if st.button("Generate Questions🤖"):
             toggle_settings()
-            if self.validation_agent.validate_sample_data(st.session_state.schema, st.session_state.sample_data):
-                with st.spinner("Generating questions..."):
-                    questions, solutions = self.generate_questions_with_retries(st.session_state.schema, st.session_state.sample_data, difficulty_level, sql_statements, num_questions, session)
-                
-                st.session_state.questions = questions
-                st.session_state.solutions = solutions
-                st.balloons()
+            if self.validation_agent.validate_sample_data(schema, sample_data):
+                with st.spinner("Generating questions and database..."):
+                    # Generate the database file for the selected schema and sample data
+                    db_filename = self.generate_database_file(schema, sample_data)
+                    
+                    # Generate the questions
+                    questions, solutions = self.generate_questions_with_retries(schema, sample_data, difficulty_level, sql_statements, num_questions, session)
+                    
+                    st.session_state.questions = questions
+                    st.session_state.solutions = solutions
+                    st.balloons()
             else:
                 st.error("Sample data validation failed. Please check your sample data and try again.")
 
@@ -366,6 +396,15 @@ class UIAgent:
             if st.button("Toggle Settings⚙️"):
                 toggle_settings()
 
+        # Generate and Download Database File
+        if st.button("Generate Database File"):
+            if st.session_state.schema and st.session_state.sample_data:
+                with st.spinner("Generating database file..."):
+                    db_filename = self.generate_database_file(st.session_state.schema, st.session_state.sample_data)
+                    st.download_button(label="Download Database", data=open(db_filename, 'rb'), file_name=db_filename)
+                    st.success("Database file generated successfully!")
+            else:
+                st.error("No schema and sample data available to generate the database file.")
 
     
     def export_to_xml(self, questions, solutions):
@@ -380,8 +419,10 @@ class UIAgent:
 
             questiontext = ET.SubElement(question_element, 'questiontext', format="html")
             text = ET.SubElement(questiontext, 'text')
-            #text.text = f"<![CDATA[{escape_cdata(question)}]]>"
-            text.text = f"<![CDATA[<p>{question}</p>]]>"
+
+            # Escape special characters instead of using CDATA
+            escaped_question = question.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            text.text = f"<p>{escaped_question}</p>"
 
             generalfeedback = ET.SubElement(question_element, 'generalfeedback', format="html")
             text = ET.SubElement(generalfeedback, 'text')
@@ -426,6 +467,8 @@ class UIAgent:
             text.text = "SHOW"
 
         return ET.tostring(quiz, encoding='unicode')
+
+
 
     def generate_questions_with_retries(self, schema, sample_data, difficulty, statements, num, session, max_retries=3):
         questions = []
