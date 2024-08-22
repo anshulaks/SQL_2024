@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 import pandas as pd
 import base64
 import xml.etree.ElementTree as ET
-from template_generator import template_generator_page 
+ 
 
 
 # Load OpenAI API key from secret_key.py
@@ -226,7 +226,7 @@ class UIAgent:
     def run(self):
         st.sidebar.title("SQL Question Generator😁")
         st.sidebar.write("Navigate through the pages to generate questions, view history, and manage schemas.")
-        page = st.sidebar.radio("Choose a page", ["Home", "Generate Questions", "Questions History", "Saved Schemas","Template Generator"])
+        page = st.sidebar.radio("Choose a page", ["Home", "Generate Questions", "Questions History", "Saved Schemas"])
 
         if page == "Home":
             st.title("Welcome to the SQL Question Generator!😄")
@@ -241,9 +241,7 @@ class UIAgent:
         elif page == "Saved Schemas":
             self.saved_schemas_page()
 
-        elif page == "Template Generator":
-            template_generator_page()  # Call the new page function
-
+        
     def generate_questions_page(self):
         st.title("Generate SQL Questions")
         session = Session()
