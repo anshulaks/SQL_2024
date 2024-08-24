@@ -346,7 +346,7 @@ class UIAgent:
         if st.button("Generate Questions🤖"):
             toggle_settings()
             if self.validation_agent.validate_sample_data(schema, sample_data):
-                with st.spinner("Generating questions and database..."):
+                with st.spinner("Generating questions and validating..."):
                     # Generate the database file for the selected schema and sample data
                     db_filename = self.generate_database_file(schema, sample_data)
                     
